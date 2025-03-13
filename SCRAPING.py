@@ -2,6 +2,7 @@ import yfinance as yf
 import requests
 import pandas as pd
 import time
+from datetime import datetime, timedelta
 
 # Base API URL for fetching stock symbols
 BASE_URL = "https://www.tsx.com/json/company-directory/search/tsx/"
@@ -45,22 +46,21 @@ df.to_csv("tmx_symbols.csv", index=False)
 
 print(f"\n✅ Scraped {len(symbols)} symbols and saved to tmx_symbols.csv")
 
-# Step 2: Fetch stock market data (Open, High, Low, Close)
+# Step 2: Fetch stock market data (Open, High, Low, Close) for the last 3 months
 stock_data = []
+end_date = datetime.today().strftime('%Y-%m-%d')
+start_date = (datetime.today() - timedelta(days=90)).strftime('%Y-%m-%d')
+
 for yf_symbol in df["Yahoo Symbol"]:
     try:
-        print(f"Fetching stock data for: {yf_symbol}")
+        print(f"Fetching stock data for: {yf_symbol} (Last 3 Months)")
         stock = yf.Ticker(yf_symbol)
-        hist = stock.history(period="1d")  # Get latest day's stock data
+        hist = stock.history(start=start_date, end=end_date)
 
         if not hist.empty:
-            latest_open = hist["Open"].iloc[-1]
-            latest_high = hist["High"].iloc[-1]
-            latest_low = hist["Low"].iloc[-1]
-            latest_close = hist["Close"].iloc[-1]
-
-            stock_data.append((yf_symbol, latest_open, latest_high, latest_low, latest_close))
-            print(f"✅ {yf_symbol}: Open={latest_open}, High={latest_high}, Low={latest_low}, Close={latest_close}")
+            for index, row in hist.iterrows():
+                stock_data.append((yf_symbol, index, row["Open"], row["High"], row["Low"], row["Close"]))
+            print(f"✅ {yf_symbol}: Data fetched for last 3 months")
 
         time.sleep(1)  # To avoid getting blocked by Yahoo
 
@@ -68,7 +68,7 @@ for yf_symbol in df["Yahoo Symbol"]:
         print(f"❌ Error fetching data for {yf_symbol}: {e}")
 
 # Convert to DataFrame and save stock prices
-df_prices = pd.DataFrame(stock_data, columns=["Yahoo Symbol", "Open", "High", "Low", "Close"])
+df_prices = pd.DataFrame(stock_data, columns=["Yahoo Symbol", "Date", "Open", "High", "Low", "Close"])
 df_prices.to_csv("stock_prices.csv", index=False)
 
-print(f"\n✅ Fetched stock prices and saved to stock_prices.csv")
+print(f"\n✅ Fetched stock prices for last 3 months and saved to stock_prices.csv")
