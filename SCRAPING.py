@@ -59,7 +59,9 @@ for yf_symbol in df["Yahoo Symbol"]:
 
         if not hist.empty:
             for index, row in hist.iterrows():
-                stock_data.append((yf_symbol, index, row["Open"], row["High"], row["Low"], row["Close"]))
+                # FIXED: Ensure date is properly formatted as string
+                date_str = index.strftime('%Y-%m-%d')
+                stock_data.append((yf_symbol, date_str, row["Open"], row["High"], row["Low"], row["Close"]))
             print(f"✅ {yf_symbol}: Data fetched for last 3 months")
 
         time.sleep(1)  # To avoid getting blocked by Yahoo
@@ -67,7 +69,7 @@ for yf_symbol in df["Yahoo Symbol"]:
     except Exception as e:
         print(f"❌ Error fetching data for {yf_symbol}: {e}")
 
-# Convert to DataFrame and save stock prices
+# Convert to DataFrame and save stock prices with explicit Date column
 df_prices = pd.DataFrame(stock_data, columns=["Yahoo Symbol", "Date", "Open", "High", "Low", "Close"])
 df_prices.to_csv("stock_prices.csv", index=False)
 
