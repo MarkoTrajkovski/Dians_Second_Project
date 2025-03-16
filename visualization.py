@@ -1,77 +1,200 @@
 import dash
 from dash import dcc, html
-import plotly.express as px
+import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output
+import plotly.graph_objects as go
 import pandas as pd
 from sqlalchemy import create_engine
-
-# Create SQLAlchemy engine
-DATABASE_URL = "postgresql://postgres:HappyFriday%4021@localhost:5432/stock_data"
-engine = create_engine(DATABASE_URL)
+import datetime
 
 
-# Fetch stock data from PostgreSQL
-def fetch_data():
-    query = """
-    SELECT yahoo_symbol, close_price, timestamp 
-    FROM stock_prices 
-    WHERE timestamp >= NOW() - INTERVAL '1 hour'  -- Fetch last 1 hour
-    ORDER BY timestamp DESC
-    """
-
-    df = pd.read_sql(query, con=engine)
-
-    # Convert timestamp column to proper datetime format
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-    # 🔹 Sort data to ensure correct plotting
-    df = df.sort_values(by="timestamp")
-
-    print(df.tail(10))  # ✅ Debugging: Ensure the latest timestamps exist
-
-    return df
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
+app.title = "Live Stock Dashboard"
 
 
-# Initialize Dash app
-app = dash.Dash(__name__)
+DB_CONNECTION = "postgresql://postgres:HappyFriday%4021@localhost:5432/stock_data"
 
-app.layout = html.Div(children=[
-    html.H1("📊 Live Stock Price Dashboard"),
 
-    dcc.Interval(
-        id='interval-component',
-        interval=5000,  # Refresh every 5 seconds
-        n_intervals=0
+def fetch_stock_data(query):
+    engine = create_engine(DB_CONNECTION)
+    try:
+        with engine.connect() as conn:
+            df = pd.read_sql(query, conn)
+        return df
+    except Exception as e:
+        print(f"Database error: {e}")
+        return pd.DataFrame()
+
+
+symbol_query = "SELECT DISTINCT yahoo_symbol FROM stock_prices ORDER BY yahoo_symbol;"
+stocks_df = fetch_stock_data(symbol_query)
+stock_symbols = stocks_df['yahoo_symbol'].tolist()
+
+
+if not stock_symbols:
+    stock_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+
+
+app.layout = dbc.Container([
+    html.H1("📈 Live Stock Price Dashboard", className="text-center mt-4 mb-3"),
+
+
+    dbc.Row([
+        dbc.Col([
+            dcc.Dropdown(
+                id='live-stock-selector',
+                options=[{'label': symbol, 'value': symbol} for symbol in stock_symbols],
+                value=stock_symbols[0] if stock_symbols else None,
+                clearable=False,
+                searchable=True,
+                placeholder="Search for a stock symbol...",
+                className="mb-3",
+                style={'color': 'black', 'fontSize': '18px', 'width': '100%'}
+            ),
+            dcc.Graph(id='live-stock-chart', config={'displayModeBar': False}),
+        ], width=8),
+
+        dbc.Col([
+            dbc.Card([
+                dbc.CardBody([
+                    html.H4("📊 Stock Information", className="card-title"),
+                    html.H2(id="stock-price", className="text-success"),
+                    html.H5(id="stock-change", className="text-muted"),
+                    html.P("Last updated:", className="mt-2"),
+                    html.P(id="last-updated", className="text-info"),
+                ])
+            ], className="mb-3")
+        ], width=4)
+    ], className="mb-5"),
+
+
+    html.H3("📜 Historical Stock Prices (Last 3 Months)", className="text-center mb-3"),
+    dcc.Dropdown(
+        id='historical-stock-selector',
+        options=[{'label': symbol, 'value': symbol} for symbol in stock_symbols],
+        value=stock_symbols[0] if stock_symbols else None,
+        clearable=False,
+        searchable=True,
+        placeholder="Search for a stock symbol...",
+        className="mb-3",
+        style={'color': 'black', 'fontSize': '18px', 'width': '100%'}
     ),
-
-    dcc.Graph(id='stock-price-chart')
-])
+    dcc.Graph(id='historical-stock-chart', config={'displayModeBar': False}),
 
 
-# Callback to update the chart in real time
+    dcc.Interval(id='interval-component', interval=10000, n_intervals=0),
+], fluid=True)
+
+
 @app.callback(
-    dash.Output('stock-price-chart', 'figure'),
-    dash.Input('interval-component', 'n_intervals')
+    [Output('live-stock-chart', 'figure'),
+     Output('stock-price', 'children'),
+     Output('stock-change', 'children'),
+     Output('last-updated', 'children')],
+    [Input('live-stock-selector', 'value'), Input('interval-component', 'n_intervals')]
 )
-def update_graph(n):
-    df = fetch_data()
+def update_live_graph(selected_symbol, n_intervals):
+    if not selected_symbol:
+        return go.Figure(), "N/A", "No Data Available", "N/A"
+
+
+    query = f"""
+        SELECT close_price, timestamp 
+        FROM stock_prices 
+        WHERE yahoo_symbol = '{selected_symbol}'
+        ORDER BY timestamp DESC
+        LIMIT 50
+    """
+    df = fetch_stock_data(query)
 
     if df.empty:
-        return px.line(title="Waiting for stock data...")
+        return go.Figure(), "N/A", "No Data Available", "N/A"
 
-    fig = px.line(df, x="timestamp", y="close_price", color="yahoo_symbol",
-                  title="Stock Price Trends (Live)")
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['close_price'] = pd.to_numeric(df['close_price'])
 
-    # 🔹 Ensure the graph does not appear blank at start
+
+    last_updated = df['timestamp'].max().strftime('%Y-%m-%d %H:%M:%S')
+
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df['timestamp'],
+        y=df['close_price'],
+        mode='lines+markers',
+        name=selected_symbol,
+        line=dict(color='lime', width=2),
+        marker=dict(size=6, color="yellow")
+    ))
+
+
+    latest_price = df['close_price'].iloc[-1]
+    prev_price = df['close_price'].iloc[-2] if len(df) > 1 else latest_price
+    change_pct = ((latest_price - prev_price) / prev_price) * 100 if prev_price else 0
+
+    change_text = f"({change_pct:+.2f}%)"
+    price_text = f"${latest_price:.2f}"
+
     fig.update_layout(
-        yaxis=dict(range=[df["close_price"].min() * 0.95, df["close_price"].max() * 1.05]),
-        xaxis_title="Timestamp",
+        title=f"📊 {selected_symbol} - Live Price",
+        xaxis_title="Time",
         yaxis_title="Stock Price",
+        template="plotly_dark"
+    )
+
+    return fig, price_text, change_text, last_updated
+
+
+@app.callback(
+    Output('historical-stock-chart', 'figure'),
+    [Input('historical-stock-selector', 'value')]
+)
+def update_historical_graph(selected_symbol):
+    if not selected_symbol:
+        return go.Figure()
+
+
+    three_months_ago = (datetime.datetime.now() - datetime.timedelta(days=90)).strftime('%Y-%m-%d')
+    query = f"""
+        SELECT close_price, timestamp 
+        FROM stock_prices 
+        WHERE yahoo_symbol = '{selected_symbol}'
+        AND timestamp >= '{three_months_ago}'
+        ORDER BY timestamp ASC
+    """
+    df = fetch_stock_data(query)
+
+    if df.empty:
+        return go.Figure()
+
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['close_price'] = pd.to_numeric(df['close_price'])
+
+
+    df['date'] = df['timestamp'].dt.date
+    daily_df = df.groupby('date').agg({'close_price': 'last'}).reset_index()
+    daily_df['date'] = pd.to_datetime(daily_df['date'])
+
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=daily_df['date'],
+        y=daily_df['close_price'],
+        mode='lines+markers',
+        name=selected_symbol,
+        line=dict(color='deepskyblue', width=2),
+        marker=dict(size=6, color="yellow")
+    ))
+
+    fig.update_layout(
+        title=f"📜 {selected_symbol} - Historical Trend (3 Months)",
+        xaxis_title="Date",
+        yaxis_title="Stock Price",
+        template="plotly_dark"
     )
 
     return fig
 
 
-
-# Run the Dash app
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run_server(debug=True)
