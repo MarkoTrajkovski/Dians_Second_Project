@@ -7,14 +7,14 @@ import pandas as pd
 from sqlalchemy import create_engine
 import datetime
 
-
+# ✅ Initialize Dash App
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 app.title = "Live Stock Dashboard"
 
-
+# ✅ PostgreSQL Database Connection
 DB_CONNECTION = "postgresql://postgres:HappyFriday%4021@localhost:5432/stock_data"
 
-
+# ✅ Function to Fetch Stock Data
 def fetch_stock_data(query):
     engine = create_engine(DB_CONNECTION)
     try:
@@ -25,19 +25,18 @@ def fetch_stock_data(query):
         print(f"Database error: {e}")
         return pd.DataFrame()
 
-
+# ✅ Fetch Available Stock Symbols
 symbol_query = "SELECT DISTINCT yahoo_symbol FROM stock_prices ORDER BY yahoo_symbol;"
 stocks_df = fetch_stock_data(symbol_query)
 stock_symbols = stocks_df['yahoo_symbol'].tolist()
 
-
+# ✅ Default Stock Symbols in Case of Database Failure
 if not stock_symbols:
     stock_symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
 
-
+# ✅ Layout
 app.layout = dbc.Container([
     html.H1("📈 Live Stock Price Dashboard", className="text-center mt-4 mb-3"),
-
 
     dbc.Row([
         dbc.Col([
@@ -67,7 +66,6 @@ app.layout = dbc.Container([
         ], width=4)
     ], className="mb-5"),
 
-
     html.H3("📜 Historical Stock Prices (Last 3 Months)", className="text-center mb-3"),
     dcc.Dropdown(
         id='historical-stock-selector',
@@ -81,11 +79,10 @@ app.layout = dbc.Container([
     ),
     dcc.Graph(id='historical-stock-chart', config={'displayModeBar': False}),
 
-
     dcc.Interval(id='interval-component', interval=10000, n_intervals=0),
 ], fluid=True)
 
-
+# ✅ Live Stock Price Callback (Now Includes "Last Price")
 @app.callback(
     [Output('live-stock-chart', 'figure'),
      Output('stock-price', 'children'),
@@ -97,9 +94,9 @@ def update_live_graph(selected_symbol, n_intervals):
     if not selected_symbol:
         return go.Figure(), "N/A", "No Data Available", "N/A"
 
-
+    # ✅ Fetch "Last Price" (real-time) and "Close Price" (historical)
     query = f"""
-        SELECT close_price, timestamp 
+        SELECT last_price, close_price, timestamp 
         FROM stock_prices 
         WHERE yahoo_symbol = '{selected_symbol}'
         ORDER BY timestamp DESC
@@ -111,25 +108,26 @@ def update_live_graph(selected_symbol, n_intervals):
         return go.Figure(), "N/A", "No Data Available", "N/A"
 
     df['timestamp'] = pd.to_datetime(df['timestamp'])
+    df['last_price'] = pd.to_numeric(df['last_price'])
     df['close_price'] = pd.to_numeric(df['close_price'])
 
-
+    # ✅ Get latest stock price & timestamp
     last_updated = df['timestamp'].max().strftime('%Y-%m-%d %H:%M:%S')
 
-
+    # ✅ Create Live Stock Price Chart
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df['timestamp'],
-        y=df['close_price'],
+        y=df['last_price'],  # ✅ Now using "Last Price"
         mode='lines+markers',
         name=selected_symbol,
         line=dict(color='lime', width=2),
         marker=dict(size=6, color="yellow")
     ))
 
-
-    latest_price = df['close_price'].iloc[-1]
-    prev_price = df['close_price'].iloc[-2] if len(df) > 1 else latest_price
+    # ✅ Compute Price Change Percentage
+    latest_price = df['last_price'].iloc[-1]
+    prev_price = df['last_price'].iloc[-2] if len(df) > 1 else latest_price
     change_pct = ((latest_price - prev_price) / prev_price) * 100 if prev_price else 0
 
     change_text = f"({change_pct:+.2f}%)"
@@ -144,7 +142,7 @@ def update_live_graph(selected_symbol, n_intervals):
 
     return fig, price_text, change_text, last_updated
 
-
+# ✅ Historical Stock Price Callback
 @app.callback(
     Output('historical-stock-chart', 'figure'),
     [Input('historical-stock-selector', 'value')]
@@ -152,7 +150,6 @@ def update_live_graph(selected_symbol, n_intervals):
 def update_historical_graph(selected_symbol):
     if not selected_symbol:
         return go.Figure()
-
 
     three_months_ago = (datetime.datetime.now() - datetime.timedelta(days=90)).strftime('%Y-%m-%d')
     query = f"""
@@ -170,12 +167,12 @@ def update_historical_graph(selected_symbol):
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df['close_price'] = pd.to_numeric(df['close_price'])
 
-
+    # ✅ Group by day to get daily close prices
     df['date'] = df['timestamp'].dt.date
     daily_df = df.groupby('date').agg({'close_price': 'last'}).reset_index()
     daily_df['date'] = pd.to_datetime(daily_df['date'])
 
-
+    # ✅ Create Historical Stock Price Chart
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=daily_df['date'],
@@ -195,6 +192,6 @@ def update_historical_graph(selected_symbol):
 
     return fig
 
-
+# ✅ Run the Dash App
 if __name__ == '__main__':
     app.run_server(debug=True)
