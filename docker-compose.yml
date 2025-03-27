@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: HappyFriday@21
+      POSTGRES_DB: stock_data
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.2.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+
+
+  spark-consumer:
+    build: .
+    volumes:
+      - ./spark:/app                 # ✅ mount spark folder as app
+      - ./drivers:/drivers
+    depends_on:
+      - kafka
+      - postgres
+    command: >
+      bash -c "spark-submit --jars /drivers/postgresql-42.7.2.jar spark_consumer.py"
+
+  scraper:
+    build: .
+    volumes:
+      - ./scraper:/app
+      - ./data:/data
+    command: ["python3", "SCRAPING.py"]
+
+  producer:
+    build: .
+    volumes:
+      - ./producer:/app
+      - ./data:/data
+    depends_on:
+      - kafka
+    command: ["python3", "producer.py"]
+
+  tracker:
+    build: .
+    volumes:
+      - ./tracker:/app
+    depends_on:
+      - postgres
+    command: ["python3", "real-time_stock_data_tracker.py"]
+
+  ml:
+    build: .
+    volumes:
+      - ./ml:/app
+    depends_on:
+      - postgres
+    command: ["python3", "ml_analysis.py"]
+
+  dash:
+    build: .
+    volumes:
+      - ./dash_app:/app
+    depends_on:
+      - postgres
+    ports:
+      - "8050:8050"
+    command: ["python3", "visualization.py"]
+
+volumes:
+  pgdata:
