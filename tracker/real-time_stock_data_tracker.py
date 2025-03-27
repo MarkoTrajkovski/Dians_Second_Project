@@ -157,22 +157,27 @@ def update_all_symbols():
     print(f"✅ Completed update for {total} symbols at {dt.datetime.now()}")
 
 def run_scheduler():
-    print("🔄 Running real-time tracker with time check loop...")
+    print("🔄 Real-time tracker with scheduling (9:30 AM to 4:00 PM EST)")
 
-    while True:
-        tz = pytz.timezone("US/Eastern")
-        now = datetime.now(tz).time()
+    schedule.every(1).minutes.do(update_all_symbols)
 
-        start_time = dt_time(9, 30)
-        end_time = dt_time(16, 0)
+    try:
+        while True:
+            tz = pytz.timezone("US/Eastern")
+            now = datetime.now(tz).time()
 
-        if start_time <= now <= end_time:
-            print(f"🟢 Time is within allowed range ({start_time} - {end_time}) — updating...")
-            update_all_symbols()
-        else:
-            print(f"⏳ Time is outside allowed range — sleeping 10 minutes...")
+            start_time = dt_time(9, 30)
+            end_time = dt_time(16, 0)
 
-        time.sleep(600)  # Sleep 10 minutes between checks
+            if start_time <= now <= end_time:
+                schedule.run_pending()
+            else:
+                print("⏳ Outside allowed time window. Skipping updates...")
+
+            time.sleep(10)
+
+    except KeyboardInterrupt:
+        print("🛑 Scheduler stopped.")
 
 if __name__ == "__main__":
     print("📈 Real-Time Stock Tracker (Batch x200)")
