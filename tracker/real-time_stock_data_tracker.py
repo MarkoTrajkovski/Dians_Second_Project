@@ -154,7 +154,7 @@ def update_all_symbols():
         fetch_and_store_batch(batch)
         time.sleep(random.uniform(4, 6))  # Short sleep to avoid hammering
 
-    print(f"✅ Completed update for {total} symbols at {datetime.datetime.now()}")
+    print(f"✅ Completed update for {total} symbols at {dt.datetime.now()}")
 
 def run_scheduler():
     print("🔄 Running real-time tracker with time check loop...")
