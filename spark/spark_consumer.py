@@ -11,12 +11,13 @@ import pytz
 import sys
 
 # PostgreSQL JDBC Configuration
-POSTGRES_URL = "jdbc:postgresql://postgres:5432/stock_data"
+POSTGRES_URL = "jdbc:postgresql://azure22.postgres.database.azure.com:5432/stock_data"
 POSTGRES_PROPERTIES = {
-    "user": "postgres",
-    "password": "HappyFriday@21",
+    "user": "BUCO",  # 👈 must include the server name
+    "password": "Markomarko123",  # 👈 match the one you reset
     "driver": "org.postgresql.Driver"
 }
+
 JDBC_DRIVER_PATH = "/drivers/postgresql-42.7.2.jar"
 
 # Kafka Configuration
@@ -43,9 +44,9 @@ schema = StructType([
 def ensure_table_exists():
     conn = psycopg2.connect(
         dbname="stock_data",
-        user="postgres",
-        password="HappyFriday@21",
-        host="postgres",
+        user="BUCO@azure22",
+        password="YOUR_NEW_AZURE_PASSWORD",
+        host="azure22.postgres.database.azure.com",
         port="5432"
     )
     cursor = conn.cursor()
