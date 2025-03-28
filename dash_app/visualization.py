@@ -14,7 +14,8 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 app.title = "Live Stock Dashboard"
 
 # ✅ PostgreSQL Database Connection
-DB_CONNECTION = "postgresql://postgres:HappyFriday%4021@postgres:5432/stock_data"
+DB_CONNECTION = "postgresql://BUCO:Markomarko123@azure22.postgres.database.azure.com:5432/stock_data"
+
 
 # ✅ Function to Fetch Stock Data
 def fetch_stock_data(query):
