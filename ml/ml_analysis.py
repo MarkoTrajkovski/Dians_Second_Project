@@ -10,7 +10,8 @@ import time
 import pytz
 import sys
 
-DB_URL = "postgresql://postgres:HappyFriday%4021@postgres:5432/stock_data"
+DB_URL = "postgresql://BUCO:Markomarko123@azure22.postgres.database.azure.com:5432/stock_data"
+
 engine = create_engine(DB_URL)
 
 
